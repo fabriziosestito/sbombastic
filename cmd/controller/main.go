@@ -37,8 +37,10 @@ import (
 
 	"github.com/go-logr/logr"
 	"github.com/nats-io/nats.go"
+
 	storagev1alpha1 "github.com/rancher/sbombastic/api/storage/v1alpha1"
 	"github.com/rancher/sbombastic/api/v1alpha1"
+	sbombasticv1alpha1 "github.com/rancher/sbombastic/api/v1alpha1"
 	"github.com/rancher/sbombastic/internal/cmdutil"
 	"github.com/rancher/sbombastic/internal/controller"
 	"github.com/rancher/sbombastic/internal/messaging"
@@ -168,6 +170,7 @@ func main() {
 	utilruntime.Must(v1alpha1.AddToScheme(scheme))
 	utilruntime.Must(storagev1alpha1.AddToScheme(scheme))
 
+	utilruntime.Must(sbombasticv1alpha1.AddToScheme(scheme))
 	// +kubebuilder:scaffold:scheme
 
 	mgr, err := ctrl.NewManager(ctrl.GetConfigOrDie(), ctrl.Options{
@@ -221,6 +224,13 @@ func main() {
 		os.Exit(1)
 	}
 
+	if err = (&controller.ScanJobReconciler{
+		Client: mgr.GetClient(),
+		Scheme: mgr.GetScheme(),
+	}).SetupWithManager(mgr); err != nil {
+		setupLog.Error(err, "unable to create controller", "controller", "ScanJob")
+		os.Exit(1)
+	}
 	// +kubebuilder:scaffold:builder
 
 	if err = mgr.AddHealthzCheck("healthz", healthz.Ping); err != nil {
