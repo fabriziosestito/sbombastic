@@ -48,6 +48,18 @@ type ScanJobReconciler struct {
 // - https://pkg.go.dev/sigs.k8s.io/controller-runtime@v0.20.4/pkg/reconcile
 func (r *ScanJobReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {
 	_ = logf.FromContext(ctx)
+	obj := &sbombasticv1alpha1.ScanJob{}
+
+	if err := r.Get(ctx, req.NamespacedName, obj); err != nil {
+		if client.IgnoreNotFound(err) != nil {
+			return ctrl.Result{}, err
+		}
+
+		return ctrl.Result{}, nil
+	}
+
+	orig := obj.DeepCopy()
+	orig.InitializeConditions()
 
 	// TODO(user): your logic here
 
