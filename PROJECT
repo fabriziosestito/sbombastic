@@ -27,4 +27,13 @@ resources:
   group: storage.sbombastic.rancher.io
   kind: SBOM
   version: v1alpha1
+- api:
+    crdVersion: v1
+    namespaced: true
+  controller: true
+  domain: sbombastic.rancher.io
+  group: sbombastic
+  kind: ScanJob
+  path: github.com/rancher/sbombastic/api/v1alpha1
+  version: v1alpha1
 version: "3"
