@@ -47,21 +47,81 @@ type ScanJobReconciler struct {
 // For more details, check Reconcile and its Result here:
 // - https://pkg.go.dev/sigs.k8s.io/controller-runtime@v0.20.4/pkg/reconcile
 func (r *ScanJobReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {
-	_ = logf.FromContext(ctx)
-	obj := &sbombasticv1alpha1.ScanJob{}
+	log := logf.FromContext(ctx)
+	log.Info("Reconciling ScanJob")
 
-	if err := r.Get(ctx, req.NamespacedName, obj); err != nil {
-		if client.IgnoreNotFound(err) != nil {
-			return ctrl.Result{}, err
+	scanJob := &scanv1.ScanJob{}
+	if err := r.Get(ctx, req.NamespacedName, scanJob); err != nil {
+		if errors.IsNotFound(err) {
+			// Object not found, likely already deleted
+			return ctrl.Result{}, nil
 		}
+		log.Error(err, "Failed to get ScanJob")
+		return ctrl.Result{}, err
+	}
 
+	// Check if resource is being deleted
+	if !scanJob.DeletionTimestamp.IsZero() {
 		return ctrl.Result{}, nil
 	}
 
-	orig := obj.DeepCopy()
-	orig.InitializeConditions()
+	if scanJob.IsComplete() || scanJob.IsFailed() {
+		return ctrl.Result{}, nil
+	}
 
-	// TODO(user): your logic here
+	original := scanJob.DeepCopy()
+
+	scanJob.InitializeConditions()
+
+	reconcileResult, reconcileErr := r.reconcileKind(ctx, scanJob)
+
+	// Update status if it changed
+	if !reflect.DeepEqual(original.Status, scanJob.Status) {
+		log.Info("Updating ScanJob status")
+		if err := r.Status().Patch(ctx, scanJob, client.MergeFrom(original)); err != nil {
+			log.Error(err, "Failed to update ScanJob status")
+			return ctrl.Result{}, err
+		}
+	}
+
+	return reconcileResult, reconcileErr
+}
+
+// reconcileScanJob implements the actual reconciliation logic
+func (r *ScanJobReconciler) reconcileScanJob(ctx context.Context, scanJob *sbombasticv1alpha1.ScanJob) (ctrl.Result, error) {
+	// Check if another job is in progress
+	scanJobList := &sbombasticv1alpha1.ScanJobList{}
+	if err := r.List(ctx, scanJobList, client.InNamespace(scanJob.Namespace)); err != nil {
+		log.Error(err, "Failed to list ScanJobs")
+		scanJob.MarkFailed("ListFailed", fmt.Sprintf("Failed to list other ScanJobs: %v", err))
+		return ctrl.Result{}, err
+	}
+
+	// Check if any other job is InProgress
+	for _, job := range scanJobList.Items {
+		if job.Name != scanJob.Name && job.IsInProgress() {
+			// Another job is in progress, we need to wait
+			log.Info("Another job is in progress, requeuing", "job", job.Name)
+			scanJob.MarkQueued(scanv1.ReasonAwaitingTurn, fmt.Sprintf("Waiting for job %s to complete", job.Name))
+			// Requeue after 10 minutes
+			return ctrl.Result{RequeueAfter: 10 * time.Minute}, nil
+		}
+	}
+
+	// No other job is in progress, set this job to InProgress
+	scanJob.MarkInProgress(scanv1.ReasonProcessing, "Processing scan job")
+
+	// Publish message to NATS
+	msg := messaging.GenerateSBOM{
+		ImageName:      scanJob.Spec.ImageName,
+		ImageNamespace: scanJob.Spec.ImageNamespace,
+	}
+
+	if err := r.Publisher.Publish(&msg); err != nil {
+		log.Error(err, "Failed to publish NATS message")
+		scanJob.MarkFailed(scanv1.ReasonPublishFailed, fmt.Sprintf("Failed to publish to NATS: %v", err))
+		return ctrl.Result{}, fmt.Errorf("unable to publish CreateSBOM message: %w", err)
+	}
 
 	return ctrl.Result{}, nil
 }
