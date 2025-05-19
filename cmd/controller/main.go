@@ -108,7 +108,7 @@ func main() {
 		os.Exit(1)
 	}
 
-	js, err := messaging.NewJetStreamContext(ns)
+	js, err := messaging.NewJetStreamContext(ns.ClientURL())
 	if err != nil {
 		setupLog.Error(err, "unable to create JetStream context")
 		os.Exit(1)

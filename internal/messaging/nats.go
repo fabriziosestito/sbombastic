@@ -30,8 +30,8 @@ func NewServer() (*server.Server, error) {
 	return ns, nil
 }
 
-func NewJetStreamContext(ns *server.Server) (nats.JetStreamContext, error) {
-	nc, err := nats.Connect(ns.ClientURL())
+func NewJetStreamContext(clientURL string) (nats.JetStreamContext, error) {
+	nc, err := nats.Connect(clientURL)
 	if err != nil {
 		return nil, fmt.Errorf("failed to connect to NATS server: %w", err)
 	}

@@ -13,6 +13,8 @@ const (
 type CreateCatalog struct {
 	RegistryName      string `json:"registryName"`
 	RegistryNamespace string `json:"registryNamespace"`
+	ScanJobName       string `json:"scanJobName"`
+	ScanJobNamespace  string `json:"scanJobNamespace"`
 }
 
 func (m *CreateCatalog) MessageType() string {

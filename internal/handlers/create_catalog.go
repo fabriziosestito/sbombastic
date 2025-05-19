@@ -34,6 +34,7 @@ type CreateCatalogHandler struct {
 	registryClientFactory registryclient.ClientFactory
 	k8sClient             client.Client
 	scheme                *runtime.Scheme
+	publisher             messaging.Publisher
 	logger                *slog.Logger
 }
 
@@ -41,12 +42,14 @@ func NewCreateCatalogHandler(
 	registryClientFactory registryclient.ClientFactory,
 	k8sClient client.Client,
 	scheme *runtime.Scheme,
+	publisher messaging.Publisher,
 	logger *slog.Logger,
 ) *CreateCatalogHandler {
 	return &CreateCatalogHandler{
 		registryClientFactory: registryClientFactory,
 		k8sClient:             k8sClient,
 		scheme:                scheme,
+		publisher:             publisher,
 		logger:                logger.With("handler", "create_catalog_handler"),
 	}
 }
@@ -111,6 +114,8 @@ func (h *CreateCatalogHandler) Handle(message messaging.Message) error {
 		existingImageNames.Insert(existingImage.Name)
 	}
 
+	var imageToProcess []storagev1alpha1.Image
+
 	for newImageName := range discoveredImageNames {
 		var ref name.Reference
 		ref, err = name.ParseReference(newImageName)
@@ -127,6 +132,8 @@ func (h *CreateCatalogHandler) Handle(message messaging.Message) error {
 		}
 
 		for _, image := range images {
+			imageToProcess = append(imageToProcess, image)
+
 			if existingImageNames.Has(image.Name) {
 				continue
 			}
@@ -139,6 +146,38 @@ func (h *CreateCatalogHandler) Handle(message messaging.Message) error {
 
 	if err = h.deleteObsoleteImages(ctx, existingImageNames, discoveredImageNames, registry.Namespace); err != nil {
 		return fmt.Errorf("cannot delete obsolete images in registry %s: %w", registry.Name, err)
+	}
+
+	scanJob := &v1alpha1.ScanJob{}
+	err = h.k8sClient.Get(ctx, client.ObjectKey{
+		Name:      createCatalogMessage.ScanJobName,
+		Namespace: createCatalogMessage.ScanJobNamespace,
+	}, scanJob)
+	if err != nil {
+		return fmt.Errorf("cannot get scan job %s/%s: %w", createCatalogMessage.ScanJobNamespace, createCatalogMessage.ScanJobName, err)
+	}
+
+	if len(imageToProcess) == 0 {
+		h.logger.Debug("No images to process")
+
+		scanJob.MarkComplete("NoImagesToProcess", "No images to process")
+	} else {
+		h.logger.Debug("Images to process", "count", len(imageToProcess))
+
+		scanJob.Status.ImagesCount = len(imageToProcess)
+		scanJob.Status.ScannedImagesCount = 0
+	}
+
+	if err = h.k8sClient.Status().Update(ctx, scanJob); err != nil {
+		return fmt.Errorf("cannot update scan job %s/%s: %w", createCatalogMessage.ScanJobNamespace, createCatalogMessage.ScanJobName, err)
+	}
+
+	for _, image := range imageToProcess {
+		h.logger.Debug("Send sbom message", "image", image.Name)
+		h.publisher.Publish(&messaging.GenerateSBOM{
+			ImageName:      image.Name,
+			ImageNamespace: image.Namespace,
+		})
 	}
 
 	return nil

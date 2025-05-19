@@ -24,6 +24,7 @@ type GenerateSBOMHandler struct {
 	k8sClient client.Client
 	scheme    *runtime.Scheme
 	workDir   string
+	publisher messaging.Publisher
 	logger    *slog.Logger
 }
 
@@ -138,6 +139,15 @@ func (h *GenerateSBOMHandler) Handle(message messaging.Message) error {
 		if !apierrors.IsAlreadyExists(err) {
 			return fmt.Errorf("failed to create SBOM: %w", err)
 		}
+	}
+
+	scanSBOMMessage := &messaging.ScanSBOM{
+		SBOMName:      sbom.Name,
+		SBOMNamespace: sbom.Namespace,
+	}
+
+	if err = h.publisher.Publish(scanSBOMMessage); err != nil {
+		return fmt.Errorf("failed to publish scan SBOM message: %w", err)
 	}
 
 	return nil

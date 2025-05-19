@@ -23,11 +23,9 @@ import (
 
 // ScanJobSpec defines the desired state of ScanJob.
 type ScanJobSpec struct {
-	// INSERT ADDITIONAL SPEC FIELDS - desired state of cluster
-	// Important: Run "make" to regenerate code after modifying this file
-
-	// Foo is an example field of ScanJob. Edit scanjob_types.go to remove/update
-	Foo string `json:"foo,omitempty"`
+	// Registry is the registry in the same namespace to scan.
+	// +kubebuilder:validation:Required
+	Registry string `json:"registry"`
 }
 
 const (
@@ -39,6 +37,7 @@ const (
 	PhaseCompleted  = "Completed"
 	PhaseFailed     = "Failed"
 
+	ReasonInitializing  = "Initializing"
 	ReasonAwaitingTurn  = "AwaitingTurn"
 	ReasonProcessing    = "Processing"
 	ReasonCompleted     = "Completed"
@@ -55,6 +54,12 @@ type ScanJobStatus struct {
 	// Conditions represent the latest available observations of ScanJob state
 	// +optional
 	Conditions []metav1.Condition `json:"conditions,omitempty"`
+
+	// ImagesCount is the number of images in the registry.
+	ImagesCount int `json:"imagesCount,omitempty"`
+
+	// ScannedImagesCount is the number of images that have been scanned.
+	ScannedImagesCount int `json:"scannedImagesCount,omitempty"`
 
 	// StartTime is when the job began processing (not just queued)
 	// +optional
@@ -77,7 +82,7 @@ type ScanJob struct {
 	Status ScanJobStatus `json:"status,omitempty"`
 }
 
-// InitializeConditions initializes status fields and conditions
+// InitializeConditions initializes status fields and conditions.
 func (s *ScanJob) InitializeConditions() {
 	s.Status.Phase = PhaseQueued
 
@@ -85,24 +90,23 @@ func (s *ScanJob) InitializeConditions() {
 	meta.SetStatusCondition(&s.Status.Conditions, metav1.Condition{
 		Type:               ConditionTypeComplete,
 		Status:             metav1.ConditionFalse,
-		Reason:             "Initializing",
+		Reason:             ReasonInitializing,
 		Message:            "Scan job created",
 		ObservedGeneration: s.Generation,
 	})
 	meta.SetStatusCondition(&s.Status.Conditions, metav1.Condition{
 		Type:               ConditionTypeFailed,
 		Status:             metav1.ConditionFalse,
-		Reason:             "Initializing",
+		Reason:             ReasonInitializing,
 		Message:            "Scan job created",
 		ObservedGeneration: s.Generation,
 	})
 }
 
-// MarkQueued marks the job as queued
+// MarkQueued marks the job as queued.
 func (s *ScanJob) MarkQueued(reason, message string) {
 	s.Status.Phase = PhaseQueued
 
-	// Clear conditions
 	meta.SetStatusCondition(&s.Status.Conditions, metav1.Condition{
 		Type:               ConditionTypeComplete,
 		Status:             metav1.ConditionFalse,
@@ -120,7 +124,7 @@ func (s *ScanJob) MarkQueued(reason, message string) {
 	})
 }
 
-// MarkInProgress marks the job as in progress
+// MarkInProgress marks the job as in progress.
 func (s *ScanJob) MarkInProgress(reason, message string) {
 	s.Status.Phase = PhaseInProgress
 
@@ -144,7 +148,7 @@ func (s *ScanJob) MarkInProgress(reason, message string) {
 	})
 }
 
-// MarkComplete marks the job as complete
+// MarkComplete marks the job as complete.
 func (s *ScanJob) MarkComplete(reason, message string) {
 	s.Status.Phase = PhaseCompleted
 
@@ -168,7 +172,7 @@ func (s *ScanJob) MarkComplete(reason, message string) {
 	})
 }
 
-// MarkFailed marks the job as failed
+// MarkFailed marks the job as failed.
 func (s *ScanJob) MarkFailed(reason, message string) {
 	s.Status.Phase = PhaseFailed
 
