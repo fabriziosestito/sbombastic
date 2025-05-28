@@ -139,6 +139,10 @@ func (h *ScanSBOMHandler) Handle(message messaging.Message) error {
 			LabelPartOfKey:    LabelPartOfValue,
 		}
 
+		vulnerabilityReport.Annotations = map[string]string{
+			"sbombastic.rancher.io/scanjob": scanSBOMMessage.ScanJobName,
+		}
+
 		vulnerabilityReport.Spec = storagev1alpha1.VulnerabilityReportSpec{
 			ImageMetadata: sbom.GetImageMetadata(),
 			SARIF:         runtime.RawExtension{Raw: reportBytes},

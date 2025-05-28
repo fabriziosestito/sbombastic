@@ -21,13 +21,21 @@ rules:
   - apiGroups:
       - sbombastic.rancher.io
     resources:
-      - registries/finalizers
+      - registries
+      - scanjobs
     verbs:
+      - create
+      - delete
+      - get
+      - list
+      - patch
       - update
+      - watch
   - apiGroups:
       - sbombastic.rancher.io
     resources:
       - registries/status
+      - scanjobs/status
     verbs:
       - get
       - patch

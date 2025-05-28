@@ -11,8 +11,8 @@ const (
 )
 
 type CreateCatalog struct {
-	RegistryName      string `json:"registryName"`
-	RegistryNamespace string `json:"registryNamespace"`
+	ScanJobName      string `json:"scanJobName"`
+	ScanJobNamespace string `json:"scanJobNamespace"`
 }
 
 func (m *CreateCatalog) MessageType() string {
@@ -20,8 +20,10 @@ func (m *CreateCatalog) MessageType() string {
 }
 
 type GenerateSBOM struct {
-	ImageName      string `json:"imageName"`
-	ImageNamespace string `json:"imageNamespace"`
+	ScanJobName      string `json:"scanJobName"`
+	ScanJobNamespace string `json:"scanJobNamespace"`
+	ImageName        string `json:"imageName"`
+	ImageNamespace   string `json:"imageNamespace"`
 }
 
 func (m *GenerateSBOM) MessageType() string {
@@ -29,8 +31,10 @@ func (m *GenerateSBOM) MessageType() string {
 }
 
 type ScanSBOM struct {
-	SBOMName      string `json:"sbomName"`
-	SBOMNamespace string `json:"sbomNamespace"`
+	ScanJobName      string `json:"scanJobName"`
+	ScanJobNamespace string `json:"scanJobNamespace"`
+	SBOMName         string `json:"sbomName"`
+	SBOMNamespace    string `json:"sbomNamespace"`
 }
 
 func (m *ScanSBOM) MessageType() string {

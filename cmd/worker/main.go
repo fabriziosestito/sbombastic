@@ -52,6 +52,12 @@ func main() {
 		logger.Error("Error creating subscription", "error", err)
 		os.Exit(1)
 	}
+	js, err := messaging.NewJetStreamContext(natsURL)
+	if err != nil {
+		logger.Error("Error creating JetStream context", "error", err)
+		os.Exit(1)
+	}
+	publisher := messaging.NewPublisher(js)
 
 	config := ctrl.GetConfigOrDie()
 	scheme := scheme.Scheme
@@ -73,8 +79,8 @@ func main() {
 	}
 
 	handlers := messaging.HandlerRegistry{
-		messaging.CreateCatalogType: handlers.NewCreateCatalogHandler(registryClientFactory, k8sClient, scheme, logger),
-		messaging.GenerateSBOMType:  handlers.NewGenerateSBOMHandler(k8sClient, scheme, runDir, logger),
+		messaging.CreateCatalogType: handlers.NewCreateCatalogHandler(registryClientFactory, k8sClient, scheme, publisher, logger),
+		messaging.GenerateSBOMType:  handlers.NewGenerateSBOMHandler(k8sClient, scheme, runDir, publisher, logger),
 		messaging.ScanSBOMType:      handlers.NewScanSBOMHandler(k8sClient, scheme, runDir, logger),
 	}
 	subscriber := messaging.NewSubscriber(sub, handlers, logger)

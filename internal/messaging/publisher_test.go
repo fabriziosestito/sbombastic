@@ -15,7 +15,7 @@ func TestPublisher_Publish(t *testing.T) {
 	require.NoError(t, err)
 	defer ns.Shutdown()
 
-	js, err := NewJetStreamContext(ns)
+	js, err := NewJetStreamContext(ns.ClientURL())
 	require.NoError(t, err)
 
 	err = AddStream(js, nats.MemoryStorage)
