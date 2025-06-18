@@ -22,7 +22,9 @@ jobs:
         run: |
           git config user.name "$GITHUB_ACTOR"
           git config user.email "$GITHUB_ACTOR@users.noreply.github.com"
-
+      - name: Add repos
+        run: |
+          helm repo add nats https://nats-io.github.io/k8s/helm/charts/
       - name: Run chart-releaser
         uses: helm/chart-releaser-action@v1.7.0
         env:
