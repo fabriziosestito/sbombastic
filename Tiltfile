@@ -46,6 +46,20 @@ helm_resource(
 )
 
 
+# Install CloudNativePG
+helm_repo("cnpg-repo", "https://cloudnative-pg.github.io/charts")
+helm_resource(
+    "cloudnativepg",
+    "cnpg/cloudnative-pg",
+    namespace="cnpg-system",
+    flags=[
+        "--create-namespace",
+    ],
+    resource_deps=[
+        "cnpg-repo",
+    ],
+)
+
 # Create the sbombastic namespace
 # This is required since the helm() function doesn't support the create_namespace flag
 load("ext://namespace", "namespace_create")
@@ -69,6 +83,8 @@ yaml = helm(
     ],
 )
 k8s_yaml(yaml)
+k8s_kind("Cluster", api_version="postgresql.cnpg.io/v1")
+k8s_resource("cluster-example", resource_deps=["cloudnativepg"])
 
 # Hot reloading containers
 local_resource(
