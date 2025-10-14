@@ -1,6 +1,6 @@
 module github.com/rancher/sbombastic
 
-go 1.25.1
+go 1.25.3
 
 require (
 	github.com/aquasecurity/trivy v0.66.0
