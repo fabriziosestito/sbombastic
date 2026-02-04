@@ -187,12 +187,8 @@ func (h *CreateCatalogHandler) Handle(ctx context.Context, message messaging.Mes
 			return fmt.Errorf("cannot parse image reference %q: %w", newImageName, err)
 		}
 
-		repo := registry.GetRepository(ref.Context().RepositoryStr())
-		var matchConditions []v1alpha1.MatchCondition
-		if repo != nil {
-			matchConditions = repo.MatchConditions
-		}
-		tagIsAllowed, err := filters.FilterByTag(tagEvaluator, matchConditions, ref.Identifier())
+		repository := registry.GetRepository(ref.Context().RepositoryStr())
+		tagIsAllowed, err := filters.FilterByTag(tagEvaluator, repository, ref.Identifier())
 		if err != nil {
 			return fmt.Errorf("cannot evaluate image tag for %q: %w", newImageName, err)
 		}
