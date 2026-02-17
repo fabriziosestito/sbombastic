@@ -76,6 +76,9 @@ type ContainerRef struct {
 	ImageRef ImageRef `json:"imageRef" protobuf:"bytes,2,req,name=imageRef"`
 }
 
+// IndexWorkloadScanReportImageRef is the field index for the composite image ref of a workload scan report.
+const IndexWorkloadScanReportImageRef = "spec.containers.imageRef.composite"
+
 // ImageRef identifies a set of VulnerabilityReports by image reference.
 type ImageRef struct {
 	// Registry is the name of the Registry custom resource.

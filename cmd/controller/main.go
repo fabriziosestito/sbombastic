@@ -29,6 +29,7 @@ import (
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/labels"
 	"k8s.io/apimachinery/pkg/runtime"
 	utilruntime "k8s.io/apimachinery/pkg/util/runtime"
 	clientgoscheme "k8s.io/client-go/kubernetes/scheme"
@@ -46,6 +47,7 @@ import (
 	// to ensure that exec-entrypoint and run can make use of them.
 	_ "k8s.io/client-go/plugin/pkg/client/auth"
 
+	"github.com/kubewarden/sbomscanner/api"
 	storagev1alpha1 "github.com/kubewarden/sbomscanner/api/storage/v1alpha1"
 	"github.com/kubewarden/sbomscanner/api/v1alpha1"
 	"github.com/kubewarden/sbomscanner/internal/cmdutil"
@@ -264,6 +266,10 @@ func main() {
 					// Read-only
 					UnsafeDisableDeepCopy: ptr.To(true),
 				},
+				&storagev1alpha1.Image{}: {
+					Label:     labels.SelectorFromSet(labels.Set{api.LabelWorkloadScanKey: api.LabelWorkloadScanValue}),
+					Transform: storage.TransformStripImage,
+				},
 				&storagev1alpha1.WorkloadScanReport{}: {
 					Transform: storage.TransformStripWorkloadScanReport,
 				},
@@ -312,6 +318,13 @@ func main() {
 		Scheme: mgr.GetScheme(),
 	}).SetupWithManager(mgr); err != nil {
 		setupLog.Error(err, "unable to create controller", "controller", "WorkloadScan")
+		os.Exit(1)
+	}
+
+	if err := (&controller.ImageWorkloadScanReconciler{
+		Client: mgr.GetClient(),
+	}).SetupWithManager(mgr); err != nil {
+		setupLog.Error(err, "unable to create controller", "controller", "ImageWorkloadScan")
 		os.Exit(1)
 	}
 
