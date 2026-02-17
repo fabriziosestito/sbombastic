@@ -66,6 +66,9 @@ kind: WorkloadScanConfiguration
 metadata:
   name: default
 spec:
+  # Enable or disable the workload scan feature.
+  enabled: true
+
   # Filter which namespaces are scanned. If not specified, workloads in all namespaces are scanned.
   namespaceSelector:
     matchLabels:
@@ -74,7 +77,7 @@ spec:
   # Namespace where Registry, ScanJob, SBOM, and VulnerabilityReport resources are created.
   # WorkloadScanReport resources are always created in their respective workload namespaces.
   # If not specified, resources are created in the workload's namespace.
-  targetNamespace: sbomscanner-system
+  artifactsNamespace: sbomscanner
 
   # Interval at which discovered registries are scanned.
   scanInterval: 24h
@@ -102,7 +105,7 @@ spec:
 
 The `namespaceSelector` field uses standard Kubernetes label selectors. When specified, only workloads in namespaces matching the selector are considered for scanning. If not specified, workloads in all namespaces are scanned.
 
-The `targetNamespace` field allows centralizing scan artifacts in a single namespace. If not specified, resources are created in the workload's namespace, which is the preferred approach for multi-tenant clusters where scan data should be isolated per namespace.
+The `artifactsNamespace` field allows centralizing scan artifacts in a single namespace. If not specified, resources are created in the workload's namespace, which is the preferred approach for multi-tenant clusters where scan data should be isolated per namespace. This field can only be changed when `enabled` is `true`.
 
 The `authSecret` field references a secret containing registry credentials. This secret must exist in the SBOMScanner installation namespace and use the `kubernetes.io/dockerconfigjson` format. See [Pull an Image from a Private Registry](https://kubernetes.io/docs/tasks/configure-pod-container/pull-image-private-registry/) for details on creating this secret.
 
@@ -130,13 +133,13 @@ spec:
     - name: nginx
       imageRef:
         registry: workload-scan-docker-io
-        namespace: sbomscanner-system
+        namespace: sbomscanner
         repository: library/nginx
         tag: "1.25"
     - name: sidecar
       imageRef:
         registry: workload-scan-ghcr-io
-        namespace: sbomscanner-system
+        namespace: sbomscanner
         repository: example/sidecar
         tag: "v1.0.0"
 status:
@@ -222,9 +225,18 @@ Managed `Registry` resources have two labels:
 - `app.kubernetes.io/managed-by: sbomscanner` (standard Kubernetes label)
 - `sbomscanner.kubewarden.io/workloadscan: "true"`
 
-The `app.kubernetes.io/managed-by` label signals that the resource is managed by SBOMScanner and will be reconciled back to its expected state if modified externally.
+The `app.kubernetes.io/managed-by` label signals that the resource is managed by SBOMScanner. External modifications to managed resources are rejected by validating webhooks (for `Registry` resources) and admission plugins on the storage API extension server (for `WorkloadScanReport` resources).
 
 Associated resources (`Image`, `SBOM`, `VulnerabilityReport`) created from workload-scan-managed registries inherit the `sbomscanner.kubewarden.io/workloadscan: "true"` label. This label can be used by clients to filter and retrieve only workload-scan-related resources, and internally for selective cache watches to reduce memory usage.
+
+## Managed resource protection
+
+Resources managed by the WorkloadScan feature (`Registry` and `WorkloadScanReport`) must only be modified by the controller service account. This is enforced at two levels:
+
+- **Validating webhook**: A validating webhook on the controller intercepts mutations to `Registry` resources labeled with `sbomscanner.kubewarden.io/workloadscan: "true"` and rejects requests from any principal other than the controller service account.
+- **Admission plugin**: The storage API extension server validates mutations to `WorkloadScanReport` resources labeled with `sbomscanner.kubewarden.io/workloadscan: "true"` and rejects requests from any principal other than the controller service account.
+
+This prevents accidental or unauthorized modifications to managed resources, ensuring the reconcilers remain the sole owners of these resources.
 
 ## Registry match condition extensions
 
@@ -261,8 +273,6 @@ The `WorkloadScanReconciler` watches pods and manages `Registry` and `WorkloadSc
 The reconciler operates at the namespace level and is triggered when:
 
 - A pod is created, updated, or deleted (filtered to only trigger when container images change)
-- A managed `Registry` resource changes (to reconcile it back to the expected state)
-- A managed `WorkloadScanReport` resource changes (to reconcile it back to the expected state)
 - The `WorkloadScanConfiguration` resource changes
 - A namespace's labels change (which may affect selector matching)
 
@@ -287,23 +297,33 @@ The reconciliation logic proceeds as follows:
 8. For each workload (resolved from pod owner references), create or update a `WorkloadScanReport` with container references.
 9. Delete `WorkloadScanReport` resources for workloads that no longer exist.
 
-If a managed `Registry` or `WorkloadScanReport` is modified externally, the reconciler will revert it to the expected state on the next reconciliation.
+External modifications to managed `Registry` resources are rejected by the validating webhook. External modifications to managed `WorkloadScanReport` resources are rejected by the admission plugin on the storage API extension server. Only the controller service account is authorized to modify these resources.
 
 Registry resources are named using the pattern `workload-scan-<sanitized-host>`. For example, `ghcr.io` becomes `workload-scan-ghcr-io`.
 
 The reconciler walks up the owner reference chain to find the top-level workload. For example, a pod owned by a ReplicaSet owned by a Deployment results in a `WorkloadScanReport` for the Deployment.
 
-### ImageAnnotationReconciler
+### ImageWorkloadScanReconciler
 
-The `ImageAnnotationReconciler` maintains bidirectional references between `Image` resources and the workloads that use them. This enables efficient querying of "which workloads use this image?" without scanning all `WorkloadScanReport` resources.
+The `ImageWorkloadScanReconciler` maintains bidirectional references between `Image` resources and the `WorkloadScanReport` resources that reference them. This enables efficient querying of "which workloads use this image?" without scanning all `WorkloadScanReport` resources.
 
-The reconciler watches both `Image` and `WorkloadScanReport` resources that have the `sbomscanner.kubewarden.io/workloadscan: "true"` label. When an `Image` changes, it finds all `WorkloadScanReport` resources that reference it and updates annotations on the `Image` with workload metadata.
-
-Annotations use the format:
+The reconciler watches both `Image` and `WorkloadScanReport` resources that have the `sbomscanner.kubewarden.io/workloadscan: "true"` label.
+When an `Image` or `WorkloadScanReport` changes, it updates the `Image` status with the name and namespace of each `WorkloadScanReport` where the image is referenced.
 
 ```yaml
-annotations:
-  sbomscanner.kubewarden.io/workloadscan-<uid>: '{"name":"nginx","namespace":"production","containers":2,"summary":{...}}'
+apiVersion: storage.sbomscanner.kubewarden.io/v1alpha1
+kind: Image
+metadata:
+  name: docker-io-library-nginx-1-25-linux-amd64
+  namespace: sbomscanner
+  labels:
+    sbomscanner.kubewarden.io/workloadscan: "true"
+status:
+  workloadScanReports:
+    - name: deployment-nginx
+      namespace: production
+    - name: deployment-web-frontend
+      namespace: staging
 ```
 
 This allows the UI or API clients to quickly identify which workloads are affected by vulnerabilities in a given image.
@@ -344,7 +364,7 @@ This reduces cache memory usage since only `PartialObjectMetadata` is stored ins
 
 ### Label-based cache filtering
 
-The `sbomscanner.kubewarden.io/workloadscan: "true"` label enables selective caching. The `ImageAnnotationReconciler` uses this label to filter the `Image` resources it watches, reducing memory usage in clusters with many non-workload-scan images.
+The `sbomscanner.kubewarden.io/workloadscan: "true"` label enables selective caching. The `ImageWorkloadScanReconciler` uses this label to filter the `Image` resources it watches, reducing memory usage in clusters with many non-workload-scan images.
 
 ## Future optimization: Targeted ScanJobs
 
