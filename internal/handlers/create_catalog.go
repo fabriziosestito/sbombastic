@@ -602,14 +602,19 @@ func imageDetailsToImage(
 		layerCounter++
 	}
 
+	labels := map[string]string{
+		api.LabelManagedByKey: api.LabelManagedByValue,
+		api.LabelPartOfKey:    api.LabelPartOfValue,
+	}
+	if registry.Labels[api.LabelWorkloadScanKey] == api.LabelWorkloadScanValue {
+		labels[api.LabelWorkloadScanKey] = api.LabelWorkloadScanValue
+	}
+
 	image := storagev1alpha1.Image{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      computeImageUID(ref.Context().Name(), ref.Identifier(), details.Digest.String()),
 			Namespace: registry.Namespace,
-			Labels: map[string]string{
-				api.LabelManagedByKey: api.LabelManagedByValue,
-				api.LabelPartOfKey:    api.LabelPartOfValue,
-			},
+			Labels:    labels,
 		},
 		ImageMetadata: storagev1alpha1.ImageMetadata{
 			Registry:    registry.Name,
