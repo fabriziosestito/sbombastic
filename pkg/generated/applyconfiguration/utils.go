@@ -32,6 +32,10 @@ func ForKind(kind schema.GroupVersionKind) interface{} {
 		return &storagev1alpha1.ImageMetadataApplyConfiguration{}
 	case v1alpha1.SchemeGroupVersion.WithKind("ImageRef"):
 		return &storagev1alpha1.ImageRefApplyConfiguration{}
+	case v1alpha1.SchemeGroupVersion.WithKind("ImageStatus"):
+		return &storagev1alpha1.ImageStatusApplyConfiguration{}
+	case v1alpha1.SchemeGroupVersion.WithKind("ImageWorkloadScanReports"):
+		return &storagev1alpha1.ImageWorkloadScanReportsApplyConfiguration{}
 	case v1alpha1.SchemeGroupVersion.WithKind("Report"):
 		return &storagev1alpha1.ReportApplyConfiguration{}
 	case v1alpha1.SchemeGroupVersion.WithKind("Result"):

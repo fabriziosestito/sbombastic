@@ -25,6 +25,8 @@ func GetOpenAPIDefinitions(ref common.ReferenceCallback) map[string]common.OpenA
 		"github.com/kubewarden/sbomscanner/api/storage/v1alpha1.ImageList":                       schema_sbomscanner_api_storage_v1alpha1_ImageList(ref),
 		"github.com/kubewarden/sbomscanner/api/storage/v1alpha1.ImageMetadata":                   schema_sbomscanner_api_storage_v1alpha1_ImageMetadata(ref),
 		"github.com/kubewarden/sbomscanner/api/storage/v1alpha1.ImageRef":                        schema_sbomscanner_api_storage_v1alpha1_ImageRef(ref),
+		"github.com/kubewarden/sbomscanner/api/storage/v1alpha1.ImageStatus":                     schema_sbomscanner_api_storage_v1alpha1_ImageStatus(ref),
+		"github.com/kubewarden/sbomscanner/api/storage/v1alpha1.ImageWorkloadScanReports":        schema_sbomscanner_api_storage_v1alpha1_ImageWorkloadScanReports(ref),
 		"github.com/kubewarden/sbomscanner/api/storage/v1alpha1.Report":                          schema_sbomscanner_api_storage_v1alpha1_Report(ref),
 		"github.com/kubewarden/sbomscanner/api/storage/v1alpha1.Result":                          schema_sbomscanner_api_storage_v1alpha1_Result(ref),
 		"github.com/kubewarden/sbomscanner/api/storage/v1alpha1.SBOM":                            schema_sbomscanner_api_storage_v1alpha1_SBOM(ref),
@@ -273,12 +275,19 @@ func schema_sbomscanner_api_storage_v1alpha1_Image(ref common.ReferenceCallback)
 							},
 						},
 					},
+					"status": {
+						SchemaProps: spec.SchemaProps{
+							Description: "Status of the image",
+							Default:     map[string]interface{}{},
+							Ref:         ref("github.com/kubewarden/sbomscanner/api/storage/v1alpha1.ImageStatus"),
+						},
+					},
 				},
 				Required: []string{"imageMetadata"},
 			},
 		},
 		Dependencies: []string{
-			"github.com/kubewarden/sbomscanner/api/storage/v1alpha1.ImageLayer", "github.com/kubewarden/sbomscanner/api/storage/v1alpha1.ImageMetadata", v1.ObjectMeta{}.OpenAPIModelName()},
+			"github.com/kubewarden/sbomscanner/api/storage/v1alpha1.ImageLayer", "github.com/kubewarden/sbomscanner/api/storage/v1alpha1.ImageMetadata", "github.com/kubewarden/sbomscanner/api/storage/v1alpha1.ImageStatus", v1.ObjectMeta{}.OpenAPIModelName()},
 	}
 }
 
@@ -479,6 +488,65 @@ func schema_sbomscanner_api_storage_v1alpha1_ImageRef(ref common.ReferenceCallba
 					},
 				},
 				Required: []string{"registry", "namespace", "repository", "tag"},
+			},
+		},
+	}
+}
+
+func schema_sbomscanner_api_storage_v1alpha1_ImageStatus(ref common.ReferenceCallback) common.OpenAPIDefinition {
+	return common.OpenAPIDefinition{
+		Schema: spec.Schema{
+			SchemaProps: spec.SchemaProps{
+				Description: "ImageStatus contains the observed state of the Image",
+				Type:        []string{"object"},
+				Properties: map[string]spec.Schema{
+					"workloadScanReports": {
+						SchemaProps: spec.SchemaProps{
+							Description: "WorkloadScanReports is the list of workloads referencing this image",
+							Type:        []string{"array"},
+							Items: &spec.SchemaOrArray{
+								Schema: &spec.Schema{
+									SchemaProps: spec.SchemaProps{
+										Default: map[string]interface{}{},
+										Ref:     ref("github.com/kubewarden/sbomscanner/api/storage/v1alpha1.ImageWorkloadScanReports"),
+									},
+								},
+							},
+						},
+					},
+				},
+			},
+		},
+		Dependencies: []string{
+			"github.com/kubewarden/sbomscanner/api/storage/v1alpha1.ImageWorkloadScanReports"},
+	}
+}
+
+func schema_sbomscanner_api_storage_v1alpha1_ImageWorkloadScanReports(ref common.ReferenceCallback) common.OpenAPIDefinition {
+	return common.OpenAPIDefinition{
+		Schema: spec.Schema{
+			SchemaProps: spec.SchemaProps{
+				Description: "ImageWorkloadScanReports identifies a workload that references this image",
+				Type:        []string{"object"},
+				Properties: map[string]spec.Schema{
+					"name": {
+						SchemaProps: spec.SchemaProps{
+							Description: "Name of the WorkloadScanReport",
+							Default:     "",
+							Type:        []string{"string"},
+							Format:      "",
+						},
+					},
+					"namespace": {
+						SchemaProps: spec.SchemaProps{
+							Description: "Namespace of the WorkloadScanReport",
+							Default:     "",
+							Type:        []string{"string"},
+							Format:      "",
+						},
+					},
+				},
+				Required: []string{"name", "namespace"},
 			},
 		},
 	}
