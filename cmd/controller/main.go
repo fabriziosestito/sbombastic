@@ -73,6 +73,7 @@ type Config struct {
 	ServiceAccountName      string
 	Init                    bool
 	LogLevel                string
+	WorkloadScan            bool
 }
 
 func parseFlags() Config {
@@ -97,6 +98,7 @@ func parseFlags() Config {
 	flag.StringVar(&cfg.ServiceAccountName, "service-account-name", "sbomscanner-controller", "The name of the service account used by the controller. This is used in validating webhooks.")
 	flag.BoolVar(&cfg.Init, "init", false, "Run initialization tasks and exit.")
 	flag.StringVar(&cfg.LogLevel, "log-level", slog.LevelInfo.String(), "Log level")
+	flag.BoolVar(&cfg.WorkloadScan, "workloadscan", true, "Enable workload scan controllers.")
 
 	flag.Parse()
 	return cfg
@@ -212,6 +214,51 @@ func main() {
 		os.Exit(1)
 	}
 
+	cacheByObject := map[client.Object]cache.ByObject{
+		&metav1.PartialObjectMetadata{
+			TypeMeta: metav1.TypeMeta{
+				APIVersion: storagev1alpha1.SchemeGroupVersion.String(),
+				Kind:       "VulnerabilityReport",
+			},
+		}: {
+			// Read-only
+			UnsafeDisableDeepCopy: ptr.To(true),
+		},
+		&metav1.PartialObjectMetadata{
+			TypeMeta: metav1.TypeMeta{
+				APIVersion: corev1.SchemeGroupVersion.String(),
+				Kind:       "Namespace",
+			},
+		}: {
+			// Read-only
+			UnsafeDisableDeepCopy: ptr.To(true),
+		},
+	}
+
+	if cfg.WorkloadScan {
+		cacheByObject[&storagev1alpha1.Image{}] = cache.ByObject{
+			Label:     labels.SelectorFromSet(labels.Set{api.LabelWorkloadScanKey: api.LabelWorkloadScanValue}),
+			Transform: storage.TransformStripImage,
+		}
+		cacheByObject[&storagev1alpha1.WorkloadScanReport{}] = cache.ByObject{
+			Transform: storage.TransformStripWorkloadScanReport,
+		}
+		cacheByObject[&corev1.Pod{}] = cache.ByObject{
+			Transform: controller.TransformStripPod,
+			// Read-only
+			UnsafeDisableDeepCopy: ptr.To(true),
+		}
+		cacheByObject[&metav1.PartialObjectMetadata{
+			TypeMeta: metav1.TypeMeta{
+				APIVersion: appsv1.SchemeGroupVersion.String(),
+				Kind:       "ReplicaSet",
+			},
+		}] = cache.ByObject{
+			// Read-only
+			UnsafeDisableDeepCopy: ptr.To(true),
+		}
+	}
+
 	mgr, err := ctrl.NewManager(ctrl.GetConfigOrDie(), ctrl.Options{
 		Scheme:                 scheme,
 		Metrics:                metricsServerOptions,
@@ -233,47 +280,7 @@ func main() {
 		// LeaderElectionReleaseOnCancel: true,
 		Cache: cache.Options{
 			DefaultTransform: cache.TransformStripManagedFields(),
-			ByObject: map[client.Object]cache.ByObject{
-				&metav1.PartialObjectMetadata{
-					TypeMeta: metav1.TypeMeta{
-						APIVersion: storagev1alpha1.SchemeGroupVersion.String(),
-						Kind:       "VulnerabilityReport",
-					},
-				}: {
-					// Read-only
-					UnsafeDisableDeepCopy: ptr.To(true),
-				},
-				&corev1.Pod{}: {
-					Transform: controller.TransformStripPod,
-					// Read-only
-					UnsafeDisableDeepCopy: ptr.To(true),
-				},
-				&metav1.PartialObjectMetadata{
-					TypeMeta: metav1.TypeMeta{
-						APIVersion: corev1.SchemeGroupVersion.String(),
-						Kind:       "Namespace",
-					},
-				}: {
-					// Read-only
-					UnsafeDisableDeepCopy: ptr.To(true),
-				},
-				&metav1.PartialObjectMetadata{
-					TypeMeta: metav1.TypeMeta{
-						APIVersion: appsv1.SchemeGroupVersion.String(),
-						Kind:       "ReplicaSet",
-					},
-				}: {
-					// Read-only
-					UnsafeDisableDeepCopy: ptr.To(true),
-				},
-				&storagev1alpha1.Image{}: {
-					Label:     labels.SelectorFromSet(labels.Set{api.LabelWorkloadScanKey: api.LabelWorkloadScanValue}),
-					Transform: storage.TransformStripImage,
-				},
-				&storagev1alpha1.WorkloadScanReport{}: {
-					Transform: storage.TransformStripWorkloadScanReport,
-				},
-			},
+			ByObject:         cacheByObject,
 		},
 		Controller: config.Controller{
 			ReconciliationTimeout: 90 * time.Second,
@@ -313,19 +320,21 @@ func main() {
 		os.Exit(1)
 	}
 
-	if err := (&controller.WorkloadScanReconciler{
-		Client: mgr.GetClient(),
-		Scheme: mgr.GetScheme(),
-	}).SetupWithManager(mgr); err != nil {
-		setupLog.Error(err, "unable to create controller", "controller", "WorkloadScan")
-		os.Exit(1)
-	}
+	if cfg.WorkloadScan {
+		if err := (&controller.WorkloadScanReconciler{
+			Client: mgr.GetClient(),
+			Scheme: mgr.GetScheme(),
+		}).SetupWithManager(mgr); err != nil {
+			setupLog.Error(err, "unable to create controller", "controller", "WorkloadScan")
+			os.Exit(1)
+		}
 
-	if err := (&controller.ImageWorkloadScanReconciler{
-		Client: mgr.GetClient(),
-	}).SetupWithManager(mgr); err != nil {
-		setupLog.Error(err, "unable to create controller", "controller", "ImageWorkloadScan")
-		os.Exit(1)
+		if err := (&controller.ImageWorkloadScanReconciler{
+			Client: mgr.GetClient(),
+		}).SetupWithManager(mgr); err != nil {
+			setupLog.Error(err, "unable to create controller", "controller", "ImageWorkloadScan")
+			os.Exit(1)
+		}
 	}
 
 	if err = webhookv1alpha1.SetupRegistryWebhookWithManager(mgr, cfg.ServiceAccountNamespace, cfg.ServiceAccountName); err != nil {
