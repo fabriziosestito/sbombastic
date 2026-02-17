@@ -56,6 +56,15 @@ rules:
 - apiGroups:
   - storage.sbomscanner.kubewarden.io
   resources:
+  - images
+  verbs:
+  - get
+  - list
+  - patch
+  - watch
+- apiGroups:
+  - storage.sbomscanner.kubewarden.io
+  resources:
   - vulnerabilityreports
   verbs:
   - get
