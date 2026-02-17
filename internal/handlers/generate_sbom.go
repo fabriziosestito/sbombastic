@@ -179,14 +179,19 @@ func (h *GenerateSBOMHandler) getOrGenerateSBOM(ctx context.Context, image *stor
 		}
 	}
 
+	sbomLabels := map[string]string{
+		api.LabelManagedByKey: api.LabelManagedByValue,
+		api.LabelPartOfKey:    api.LabelPartOfValue,
+	}
+	if registry.Labels[api.LabelWorkloadScanKey] == api.LabelWorkloadScanValue {
+		sbomLabels[api.LabelWorkloadScanKey] = api.LabelWorkloadScanValue
+	}
+
 	sbom := &storagev1alpha1.SBOM{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      message.Image.Name,
 			Namespace: message.Image.Namespace,
-			Labels: map[string]string{
-				api.LabelManagedByKey: api.LabelManagedByValue,
-				api.LabelPartOfKey:    api.LabelPartOfValue,
-			},
+			Labels:    sbomLabels,
 		},
 		ImageMetadata: image.GetImageMetadata(),
 		SPDX:          runtime.RawExtension{Raw: spdxBytes},
