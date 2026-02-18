@@ -62,7 +62,7 @@ func (v *WorkloadScanConfigurationCustomValidator) ValidateUpdate(_ context.Cont
 	allErrs = append(allErrs, validateArtifactsNamespaceUpdate(
 		oldConfiguration.Spec.ArtifactsNamespace,
 		configuration.Spec.ArtifactsNamespace,
-		configuration.Spec.Enabled)...)
+		oldConfiguration.Spec.Enabled)...)
 
 	if len(allErrs) > 0 {
 		return nil, apierrors.NewInvalid(
