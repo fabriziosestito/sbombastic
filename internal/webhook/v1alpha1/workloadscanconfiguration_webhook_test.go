@@ -203,7 +203,28 @@ func TestWorkloadScanConfigurationCustomValidator_ValidateUpdate(t *testing.T) {
 			},
 		},
 		{
-			name: "should deny when artifactsNamespace is set while enabled",
+			name: "should allow changing artifactsNamespace and enabling in a single update",
+			oldConfiguration: &v1alpha1.WorkloadScanConfiguration{
+				Spec: v1alpha1.WorkloadScanConfigurationSpec{
+					Enabled:            false,
+					ArtifactsNamespace: "old-namespace",
+				},
+			},
+			configuration: &v1alpha1.WorkloadScanConfiguration{
+				Spec: v1alpha1.WorkloadScanConfigurationSpec{
+					Enabled:            true,
+					ArtifactsNamespace: "new-namespace",
+				},
+			},
+		},
+		{
+			name: "should deny when artifactsNamespace is changed while enabled",
+			oldConfiguration: &v1alpha1.WorkloadScanConfiguration{
+				Spec: v1alpha1.WorkloadScanConfigurationSpec{
+					Enabled:            true,
+					ArtifactsNamespace: "old-namespace",
+				},
+			},
 			configuration: &v1alpha1.WorkloadScanConfiguration{
 				Spec: v1alpha1.WorkloadScanConfigurationSpec{
 					Enabled:            true,
@@ -217,6 +238,7 @@ func TestWorkloadScanConfigurationCustomValidator_ValidateUpdate(t *testing.T) {
 			name: "should deny when artifactsNamespace is cleared while enabled",
 			oldConfiguration: &v1alpha1.WorkloadScanConfiguration{
 				Spec: v1alpha1.WorkloadScanConfigurationSpec{
+					Enabled:            true,
 					ArtifactsNamespace: "old-namespace",
 				},
 			},
