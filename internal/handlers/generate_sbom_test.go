@@ -897,7 +897,7 @@ func TestGenerateSBOMHandler_Handle_Certificates(t *testing.T) {
 				expectedScanMessage,
 			).Return(nil).Once()
 
-			handler := NewGenerateSBOMHandler(k8sClient, scheme, "/tmp", testTrivyJavaDBRepository, publisher, slog.Default())
+			handler := NewGenerateSBOMHandler(k8sClient, scheme, "/tmp", testTrivyJavaDBRepository, publisher, "sbomscanner", slog.Default())
 
 			message, err := json.Marshal(&GenerateSBOMMessage{
 				BaseMessage: BaseMessage{
