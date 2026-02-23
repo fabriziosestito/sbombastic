@@ -103,6 +103,7 @@ targets:
       key: $.worker.image.tag
   update_readme:
     scmid: default
+    name: Update Helm chart README
     kind: file
     sourceid: readmeFile
     spec:
