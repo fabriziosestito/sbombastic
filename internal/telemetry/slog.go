@@ -41,8 +41,10 @@ func (h *traceContextHandler) Enabled(ctx context.Context, level slog.Level) boo
 
 // Handle adds trace_id and span_id attributes to record when ctx carries a valid SpanContext,
 // then delegates to the inner handler.
+// The record is cloned before mutation so downstream handlers (or future fan-out wrappers) never see attrs leaked from a shared backing array.
 func (h *traceContextHandler) Handle(ctx context.Context, record slog.Record) error {
 	if sc := trace.SpanContextFromContext(ctx); sc.IsValid() {
+		record = record.Clone()
 		record.AddAttrs(
 			slog.String(traceIDKey, sc.TraceID().String()),
 			slog.String(spanIDKey, sc.SpanID().String()),
